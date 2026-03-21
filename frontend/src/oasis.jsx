@@ -1,38 +1,38 @@
-import { useState, useRef, useCallback } from "react";
-
-// TheMealDB — 100% free, no API key needed
-const MEALDB = "https://www.themealdb.com/api/json/v1/1";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 const G = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Rye&family=Lora:ital,wght@0,400;0,600;1,400&family=Courier+Prime:wght@400;700&display=swap');
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
     .root-wrap { position:relative; min-height:100vh; overflow-x:hidden; }
     .app-bg {
-      min-height:100vh;
-      background:#2c1a0a;
+      min-height:100vh; background:#2c1a0a;
       background-image:
         repeating-linear-gradient(90deg,rgba(0,0,0,0.03) 0px,rgba(0,0,0,0.03) 1px,transparent 1px,transparent 40px),
         repeating-linear-gradient(0deg,rgba(0,0,0,0.03) 0px,rgba(0,0,0,0.03) 1px,transparent 1px,transparent 40px);
-      font-family:'Lora',serif;
-      color:#f5e6cc;
+      font-family:'Lora',serif; color:#f5e6cc;
     }
 
     /* ── Saloon doors ── */
-    .saloon-wrap { position:absolute; top:0; left:0; right:0; height:100vh; z-index:100; }
+    .saloon-wrap { position:fixed; inset:0; z-index:9999; }
+    body.doors-open { overflow:hidden; }
     .saloon-curtain { position:absolute; inset:0; background:#0e0600; animation:curtainFade 2.8s ease forwards; }
     @keyframes curtainFade { 0%{opacity:1} 65%{opacity:1} 100%{opacity:0} }
     .saloon-title-box {
       position:absolute; top:40%; left:50%; transform:translate(-50%,-50%);
       text-align:center; z-index:10; pointer-events:none;
-      animation:titleBurst 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.2s both;
+      animation:titleBurst 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.2s both,
+                titleFade 0.5s ease 2s forwards;
     }
     @keyframes titleBurst {
       from{opacity:0;transform:translate(-50%,-46%) scale(0.75)}
       to{opacity:1;transform:translate(-50%,-50%) scale(1)}
     }
-    .saloon-doors-row { position:absolute; inset:0; display:flex; }
+    @keyframes titleFade {
+      from{opacity:1;transform:translate(-50%,-50%) scale(1)}
+      to{opacity:0;transform:translate(-50%,-54%) scale(0.92)}
+    }
+    .saloon-doors-row { position:absolute; inset:0; display:flex; overflow:hidden; perspective:1200px; }
     .sd {
       width:50%; height:100%;
       background:linear-gradient(180deg,#3d2008 0%,#2a1505 55%,#3d2008 100%);
@@ -43,8 +43,20 @@ const G = () => (
       content:''; position:absolute; inset:0; pointer-events:none;
       background:repeating-linear-gradient(92deg,transparent 0px,transparent 22px,rgba(0,0,0,0.13) 22px,rgba(0,0,0,0.13) 24px);
     }
-    .sd-l { border-right:5px solid #8b5a1a; transform-origin:left center; animation:swingL 1.6s cubic-bezier(0.25,0.46,0.45,0.94) 0.9s both; }
-    .sd-r { border-left:5px solid #8b5a1a; transform-origin:right center; animation:swingR 1.6s cubic-bezier(0.25,0.46,0.45,0.94) 0.9s both; }
+    .sd-l {
+      border-right:4px solid #8b5a1a;
+      transform-origin:left center;
+      animation:swingL 1.6s cubic-bezier(0.25,0.46,0.45,0.94) 0.9s both;
+      backface-visibility:hidden;
+      clip-path: inset(0 0 0 0);
+    }
+    .sd-r {
+      border-left:4px solid #8b5a1a;
+      transform-origin:right center;
+      animation:swingR 1.6s cubic-bezier(0.25,0.46,0.45,0.94) 0.9s both;
+      backface-visibility:hidden;
+      clip-path: inset(0 0 0 0);
+    }
     @keyframes swingL {
       0%{transform:perspective(900px) rotateY(0deg);opacity:1}
       55%{transform:perspective(900px) rotateY(-108deg)}
@@ -69,9 +81,7 @@ const G = () => (
     .cp  { font-family:'Courier Prime',monospace; }
     .header-plank {
       background:linear-gradient(180deg,#3d2008 0%,#2a1505 40%,#3d2008 100%);
-      border-bottom:4px solid #8b5a1a;
-      box-shadow:0 6px 24px rgba(0,0,0,0.7);
-      position:relative;
+      border-bottom:4px solid #8b5a1a; box-shadow:0 6px 24px rgba(0,0,0,0.7); position:relative;
     }
     .header-plank::before {
       content:''; position:absolute; inset:0; pointer-events:none;
@@ -82,8 +92,7 @@ const G = () => (
     .wanted-card {
       background:#f0d898; border:3px solid #8b5e1a; position:relative;
       box-shadow:4px 4px 0 #5a3a0a,0 8px 32px rgba(0,0,0,0.5);
-      transition:transform 0.2s ease,box-shadow 0.2s ease;
-      overflow:hidden;
+      transition:transform 0.2s ease,box-shadow 0.2s ease; overflow:hidden;
     }
     .wanted-card:hover { transform:translateY(-3px) rotate(0.3deg); box-shadow:6px 8px 0 #5a3a0a,0 12px 40px rgba(0,0,0,0.6); }
     .wanted-card::before { content:''; position:absolute; inset:6px; border:1px solid rgba(139,94,26,0.4); pointer-events:none; z-index:1; }
@@ -114,15 +123,12 @@ const G = () => (
     .itag button { background:none; border:none; color:#f0c060; cursor:pointer; font-size:14px; line-height:1; }
     .drop-zone { border:3px dashed #8b5a1a; background:rgba(139,90,26,0.08); transition:all 0.2s; cursor:pointer; }
     .drop-zone:hover,.drop-zone.dov { border-color:#c9922a; background:rgba(201,146,42,0.12); }
-    .step-num { width:28px; height:28px; border:2px solid #8b5e1a; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Rye',cursive; font-size:12px; color:#8b5e1a; flex-shrink:0; }
+    .step-num { width:26px; height:26px; border:2px solid #8b5e1a; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Rye',cursive; font-size:11px; color:#8b5e1a; flex-shrink:0; }
     .sl { font-family:'Courier Prime',monospace; font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:#c9922a; border-bottom:1px solid rgba(201,146,42,0.3); padding-bottom:4px; margin-bottom:10px; }
-    .recipe-img { width:100%; height:180px; object-fit:cover; display:block; border-bottom:3px solid #8b5e1a; }
-    .visit-btn { display:block; text-align:center; margin-top:10px; background:#8b5e1a; border:1px solid #c9922a; color:#f5e6cc; font-family:'Rye',cursive; font-size:12px; padding:8px 16px; cursor:pointer; text-decoration:none; letter-spacing:0.06em; }
-    .visit-btn:hover { background:#a07030; }
     @keyframes spin { to{transform:rotate(360deg)} }
     .spin { animation:spin 1s linear infinite; }
     @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
-    .fu { animation:fadeUp 0.4s ease forwards; }
+    .fu { animation:fadeUp 0.45s ease forwards; }
     @keyframes campfire { 0%,100%{opacity:1;transform:scaleY(1) translateX(0)} 33%{opacity:.85;transform:scaleY(1.05) translateX(1px)} 66%{opacity:.9;transform:scaleY(.97) translateX(-1px)} }
     .flame { animation:campfire 1.2s ease-in-out infinite; transform-origin:bottom center; }
     ::-webkit-scrollbar { width:8px; }
@@ -140,48 +146,28 @@ const PANTRY = {
   "Spices & Sauces": ["Salt","Black Pepper","Cumin","Paprika","Chili Powder","Oregano","Garlic Powder","Hot Sauce","Soy Sauce","Worcestershire","Honey","Mustard"],
   "Baking":          ["Sugar","Brown Sugar","Baking Powder","Baking Soda","Vanilla Extract","Cocoa Powder","Oats"],
 };
+const CUISINE_TYPES = ["American","Asian","British","Caribbean","Chinese","French","Greek","Indian","Italian","Japanese","Korean","Mediterranean","Mexican","Middle Eastern","Moroccan","Polish","Spanish","Thai","Vietnamese"];
+const MEAL_TYPES    = ["Breakfast","Brunch","Lunch/Dinner","Snack","Teatime"];
+const DISH_TYPES    = ["Main Course","Salad","Soup","Sandwiches","Pizza","Pasta","Desserts","Egg","Seafood","Side Dish","Starter","Bread","Sweets","Biscuits and Cookies"];
 
-const CUISINE_TYPES = [
-  "American","Asian","British","Caribbean","Chinese","French","Greek",
-  "Indian","Italian","Japanese","Korean","Mediterranean","Mexican",
-  "Middle Eastern","Moroccan","Polish","Spanish","Thai","Vietnamese",
-];
-const MEAL_TYPES = ["Breakfast","Brunch","Lunch/Dinner","Snack","Teatime"];
-const DISH_TYPES = [
-  "Main Course","Salad","Soup","Sandwiches","Pizza","Pasta",
-  "Desserts","Egg","Seafood","Side Dish","Starter","Bread",
-  "Sweets","Biscuits and Cookies",
-];
-
-/* ── TheMealDB area → cuisine map ── */
-const CUISINE_MAP = {
-  "American":"American","British":"British","Canadian":"American",
-  "Chinese":"Chinese","Dutch":"European","Egyptian":"Middle Eastern",
-  "French":"French","Greek":"Greek","Indian":"Indian","Irish":"British",
-  "Italian":"Italian","Jamaican":"Caribbean","Japanese":"Japanese",
-  "Kenyan":"African","Korean":"Korean","Malaysian":"Asian",
-  "Mexican":"Mexican","Moroccan":"Moroccan","Polish":"Polish",
-  "Portuguese":"European","Russian":"European","Spanish":"Spanish",
-  "Thai":"Thai","Tunisian":"African","Turkish":"Middle Eastern",
-  "Unknown":"Other","Vietnamese":"Vietnamese",
-};
-
+/* ── Components ── */
 const Star = ({ s=24, c="#f0c060" }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill={c} style={{flexShrink:0}}>
     <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
   </svg>
 );
 
-/* ── Saloon Doors ── */
 const Saloon = ({ onDone }) => {
   const [alive, setAlive] = useState(true);
+  useEffect(() => {
+    document.body.classList.add("doors-open");
+    return () => document.body.classList.remove("doors-open");
+  }, []);
   if (!alive) return null;
   const planks = Array.from({ length: 14 });
   const Door = ({ isRight }) => (
-    <div
-      className={isRight ? "sd sd-r" : "sd sd-l"}
-      onAnimationEnd={isRight ? () => { setAlive(false); onDone(); } : undefined}
-    >
+    <div className={isRight ? "sd sd-r" : "sd sd-l"}
+      onAnimationEnd={isRight ? () => { setAlive(false); onDone(); } : undefined}>
       {planks.map((_,i) => <div key={i} className="door-plank" style={{opacity:0.4+(i%4)*0.18}}/>)}
       <div className="door-arch"><div className="door-arch-inner"/></div>
       {planks.map((_,i) => <div key={i} className="door-plank" style={{opacity:0.4+(i%4)*0.18}}/>)}
@@ -199,19 +185,13 @@ const Saloon = ({ onDone }) => {
         <h1 className="rye" style={{fontSize:"clamp(48px,10vw,88px)",color:"#f0c060",textShadow:"0 0 50px rgba(240,160,0,0.3),4px 6px 0 rgba(0,0,0,0.85)",letterSpacing:"0.12em",lineHeight:1}}>
           OASIS
         </h1>
-        <p style={{color:"#c9922a",fontSize:13,fontStyle:"italic",marginTop:14,letterSpacing:"0.2em"}}>
-          push on through, partner
-        </p>
+        <p style={{color:"#c9922a",fontSize:13,fontStyle:"italic",marginTop:14,letterSpacing:"0.2em"}}>push on through, partner</p>
       </div>
-      <div className="saloon-doors-row">
-        <Door isRight={false}/>
-        <Door isRight={true}/>
-      </div>
+      <div className="saloon-doors-row"><Door isRight={false}/><Door isRight={true}/></div>
     </div>
   );
 };
 
-/* ── Campfire loader ── */
 const Campfire = () => (
   <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,padding:"40px 0"}}>
     <svg width="80" height="80" viewBox="0 0 80 80">
@@ -233,75 +213,69 @@ const Campfire = () => (
 );
 
 /* ── Recipe Card ── */
-const RecipeCard = ({ meal, idx }) => {
+const RecipeCard = ({ r, idx }) => {
   const [open, setOpen] = useState(false);
-
-  // Extract ingredients from TheMealDB format
-  const ingredients = [];
-  for (let i = 1; i <= 20; i++) {
-    const ing = meal[`strIngredient${i}`];
-    const msr = meal[`strMeasure${i}`];
-    if (ing && ing.trim()) ingredients.push(`${msr ? msr.trim() + " " : ""}${ing.trim()}`);
-  }
-
-  const steps = meal.strInstructions
-    ? meal.strInstructions.split(/\r?\n/).filter(s => s.trim().length > 10).slice(0, 8)
-    : [];
-
   return (
-    <div className="wanted-card fu" style={{animationDelay:`${idx*110}ms`}}>
-      {meal.strMealThumb && <img src={meal.strMealThumb} alt={meal.strMeal} className="recipe-img"/>}
-      <div style={{padding:"16px 20px 20px",color:"#3d1f05",position:"relative",zIndex:2}}>
-        <div style={{textAlign:"center",marginBottom:12}}>
-          <div className="cp" style={{fontSize:10,letterSpacing:"0.3em",fontWeight:700,borderTop:"2px solid #8b5e1a",borderBottom:"2px solid #8b5e1a",padding:"3px 0",marginBottom:8,color:"#5a3010"}}>
+    <div className="wanted-card fu" style={{animationDelay:`${idx*110}ms`,color:"#3d1f05"}}>
+      <div style={{padding:"22px 22px 20px",position:"relative",zIndex:2}}>
+
+        {/* Header */}
+        <div style={{textAlign:"center",marginBottom:14}}>
+          <div className="cp" style={{fontSize:10,letterSpacing:"0.3em",fontWeight:700,borderTop:"2px solid #8b5e1a",borderBottom:"2px solid #8b5e1a",padding:"3px 0",marginBottom:10,color:"#5a3010"}}>
             ✦ FRONTIER RECIPE ✦
           </div>
-          <h3 className="rye" style={{fontSize:17,color:"#3d1205",lineHeight:1.2,marginBottom:4}}>{meal.strMeal}</h3>
-          <div style={{display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap",marginTop:4}}>
-            {meal.strArea && <span className="cp" style={{fontSize:10,background:"rgba(139,90,26,0.15)",border:"1px solid rgba(139,90,26,0.3)",padding:"2px 8px",color:"#5a3010"}}>{meal.strArea}</span>}
-            {meal.strCategory && <span className="cp" style={{fontSize:10,background:"rgba(139,90,26,0.15)",border:"1px solid rgba(139,90,26,0.3)",padding:"2px 8px",color:"#5a3010"}}>{meal.strCategory}</span>}
-          </div>
+          <h3 className="rye" style={{fontSize:19,color:"#3d1205",lineHeight:1.2,marginBottom:6}}>{r.name}</h3>
+          <p style={{fontSize:12,fontStyle:"italic",color:"#7a4a20",lineHeight:1.5}}>{r.tagline}</p>
         </div>
 
-        <div style={{marginBottom:12}}>
-          <p className="sl">Ingredients</p>
-          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-            {(open ? ingredients : ingredients.slice(0,6)).map((ing,i)=>(
-              <span key={i} className="cp" style={{fontSize:11,background:"rgba(139,90,26,0.15)",border:"1px solid rgba(139,90,26,0.3)",padding:"2px 8px",color:"#5a3010"}}>{ing}</span>
+        {/* Meta */}
+        <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid #c9922a",borderBottom:"1px solid #c9922a",marginBottom:14}}>
+          {[["⏱",r.time],["👥",r.serves],["🌶",r.difficulty]].map(([ic,v])=>(
+            <div key={ic} style={{textAlign:"center",flex:1}}>
+              <div style={{fontSize:14}}>{ic}</div>
+              <div className="cp" style={{fontSize:11,fontWeight:700,color:"#5a3010"}}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Description */}
+        <p style={{fontSize:13,lineHeight:1.7,color:"#4a2810",marginBottom:14}}>{r.description}</p>
+
+        {/* Ingredients */}
+        <div style={{marginBottom:14}}>
+          <p className="sl">Ingredients Used</p>
+          <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+            {r.ingredients?.map((ing,i)=>(
+              <span key={i} className="cp" style={{fontSize:11,background:"rgba(139,90,26,0.15)",border:"1px solid rgba(139,90,26,0.35)",padding:"3px 9px",color:"#5a3010"}}>
+                {ing}
+              </span>
             ))}
-            {!open && ingredients.length > 6 && (
-              <span className="cp" style={{fontSize:11,color:"#8b5a1a",fontStyle:"italic",padding:"2px 4px"}}>+{ingredients.length-6} more</span>
-            )}
           </div>
         </div>
 
-        <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",background:"#8b5e1a",border:"1px solid #c9922a",color:"#f5e6cc",fontFamily:"Rye,cursive",fontSize:13,padding:"8px",cursor:"pointer",letterSpacing:"0.06em",marginBottom:8}}>
+        {/* Steps toggle */}
+        <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",background:"#8b5e1a",border:"1px solid #c9922a",color:"#f5e6cc",fontFamily:"Rye,cursive",fontSize:13,padding:"9px",cursor:"pointer",letterSpacing:"0.06em",marginBottom: open ? 12 : 0}}>
           {open ? "▲ Hide Instructions" : "▼ Show Instructions"}
         </button>
 
-        {open && steps.length > 0 && (
-          <div style={{marginBottom:12,paddingTop:10,borderTop:"1px dashed #c9922a"}}>
+        {open && (
+          <div style={{paddingTop:12,borderTop:"1px dashed #c9922a"}}>
             <p className="sl">Method</p>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {steps.map((s,i)=>(
-                <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {r.steps?.map((s,i)=>(
+                <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start"}}>
                   <div className="step-num">{i+1}</div>
-                  <p style={{fontSize:12,lineHeight:1.6,flex:1,color:"#3d1f05"}}>{s}</p>
+                  <p style={{fontSize:13,lineHeight:1.65,flex:1,color:"#3d1f05"}}>{s}</p>
                 </div>
               ))}
             </div>
+            {r.tip && (
+              <div style={{marginTop:14,padding:"10px 14px",background:"rgba(139,90,26,0.12)",border:"1px solid rgba(139,90,26,0.3)",borderLeft:"4px solid #8b5e1a"}}>
+                <p className="cp" style={{fontSize:11,fontWeight:700,color:"#8b4010",marginBottom:3}}>TRAIL TIP</p>
+                <p style={{fontSize:12,fontStyle:"italic",color:"#5a3010"}}>{r.tip}</p>
+              </div>
+            )}
           </div>
-        )}
-
-        {meal.strYoutube && (
-          <a href={meal.strYoutube} target="_blank" rel="noreferrer" className="visit-btn">
-            ▶ Watch on YouTube
-          </a>
-        )}
-        {meal.strSource && (
-          <a href={meal.strSource} target="_blank" rel="noreferrer" className="visit-btn" style={{marginTop:6}}>
-            🤠 Full Recipe
-          </a>
         )}
       </div>
     </div>
@@ -314,7 +288,7 @@ const Pill = ({ label, active, onClick }) => (
   </button>
 );
 
-/* ── Main App ── */
+/* ── Main ── */
 export default function Oasis() {
   const [doors,      setDoors]      = useState(true);
   const [mode,       setMode]       = useState("checklist");
@@ -334,12 +308,12 @@ export default function Oasis() {
   const [drag,       setDrag]       = useState(false);
   const fileRef = useRef();
 
-  const toggle = item => setChecked(p=>({...p,[item]:!p[item]}));
-  const checkedList = Object.keys(checked).filter(k=>checked[k]);
+  const toggle = item => setChecked(p => ({ ...p, [item]: !p[item] }));
+  const checkedList = Object.keys(checked).filter(k => checked[k]);
 
   const addTag = () => {
     const t = txt.trim();
-    if (t && !tags.includes(t)) setTags(p=>[...p,t]);
+    if (t && !tags.includes(t)) setTags(p => [...p, t]);
     setTxt("");
   };
 
@@ -357,92 +331,92 @@ export default function Oasis() {
         r.readAsDataURL(file);
       });
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{"Content-Type":"application/json"},
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model:"claude-sonnet-4-20250514", max_tokens:800,
-          messages:[{role:"user",content:[
-            {type:"image",source:{type:"base64",media_type:file.type,data:b64}},
-            {type:"text",text:'List every food ingredient visible. Return ONLY a JSON array of strings. Example: ["chicken","garlic"]'},
-          ]}],
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 800,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: file.type, data: b64 } },
+              { type: "text", text: 'List every food ingredient visible. Return ONLY a JSON array of strings. Example: ["chicken","garlic"]' },
+            ],
+          }],
         }),
       });
       const data = await resp.json();
-      const raw = (data.content||[]).map(c=>c.text||"").join("");
-      const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
+      const raw = (data.content || []).map(c => c.text || "").join("");
+      const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
       setPhotoIngs(Array.isArray(parsed) ? parsed : []);
     } catch { setPhotoIngs([]); }
     setAnalyzing(false);
   }, []);
 
-  const ingredients = mode==="checklist" ? checkedList : mode==="manual" ? tags : photoIngs;
+  const ingredients = mode === "checklist" ? checkedList : mode === "manual" ? tags : photoIngs;
 
   const fetchRecipes = async () => {
     if (!ingredients.length) { setErr("Round up some ingredients first, partner!"); return; }
     setErr(""); setLoading(true); setRecipes([]);
 
+    const prefs = [
+      cuisineType.length ? `Cuisine: ${cuisineType.join(", ")}` : "",
+      mealType.length    ? `Meal type: ${mealType.join(", ")}` : "",
+      dishType.length    ? `Dish type: ${dishType.join(", ")}` : "",
+      notes              ? `Extra notes: ${notes}` : "",
+    ].filter(Boolean).join(". ");
+
+    const prompt = `You are a world-class chef with expertise in all global cuisines.
+
+The user has ONLY these ingredients available: ${ingredients.join(", ")}.
+
+STRICT RULES — no exceptions:
+1. Every ingredient listed in each recipe MUST come ONLY from the user's available list above.
+2. Do NOT add ANY ingredient not on that list — not salt, pepper, oil, water, butter, or any pantry staple unless it is explicitly listed.
+3. Only use a subset of the available ingredients that make sense together — you do NOT need to use all of them.
+4. If a cuisine type is specified, make it genuinely authentic — correct techniques, traditional flavor profiles, and culturally accurate dish structure — using only available ingredients that fit.
+5. Never invent, assume, or hallucinate any ingredient.
+${prefs ? `\nUser preferences: ${prefs}` : ""}
+
+Generate exactly 4 creative, varied recipes. Return ONLY valid JSON with no markdown or extra text:
+{
+  "recipes": [
+    {
+      "name": "Recipe name",
+      "tagline": "Short enticing description, max 10 words",
+      "description": "2-3 sentences about the dish and its cultural roots if relevant",
+      "time": "e.g. 30 mins",
+      "serves": "e.g. 4",
+      "difficulty": "Easy / Medium / Hard",
+      "ingredients": ["exact amount + ingredient name — from available list only"],
+      "steps": ["Step 1...", "Step 2...", "Step 3...", "Step 4...", "Step 5..."],
+      "tip": "One useful cooking tip specific to this dish"
+    }
+  ]
+}`;
+
     try {
-      // Search by each ingredient, collect unique meal IDs
-      const mealMap = {};
-      await Promise.all(ingredients.slice(0, 4).map(async ing => {
-        const r = await fetch(`${MEALDB}/filter.php?i=${encodeURIComponent(ing)}`);
-        const d = await r.json();
-        (d.meals || []).forEach(m => { mealMap[m.idMeal] = m; });
-      }));
-
-      let mealIds = Object.keys(mealMap);
-      if (!mealIds.length) {
-        // Fallback: search by name
-        const r = await fetch(`${MEALDB}/search.php?s=${encodeURIComponent(ingredients[0])}`);
-        const d = await r.json();
-        (d.meals || []).forEach(m => { mealMap[m.idMeal] = m; });
-        mealIds = Object.keys(mealMap);
-      }
-
-      if (!mealIds.length) {
-        setErr("No recipes found for those ingredients. Try different ones, partner.");
-        setLoading(false);
-        return;
-      }
-
-      // Fetch full details for up to 12 meals
-      const shuffled = mealIds.sort(() => Math.random() - 0.5).slice(0, 12);
-      const details = await Promise.all(
-        shuffled.map(id =>
-          fetch(`${MEALDB}/lookup.php?i=${id}`).then(r => r.json()).then(d => d.meals?.[0])
-        )
-      );
-
-      let results = details.filter(Boolean);
-
-      // Apply cuisine filter
-      if (cuisineType.length) {
-        results = results.filter(m =>
-          cuisineType.some(c => {
-            const area = (m.strArea||"").toLowerCase();
-            return area.includes(c.toLowerCase()) || c.toLowerCase().includes(area);
-          })
-        );
-      }
-
-      // Apply dish/category filter
-      if (dishType.length) {
-        results = results.filter(m =>
-          dishType.some(d => (m.strCategory||"").toLowerCase().includes(d.toLowerCase()) || d.toLowerCase().includes((m.strCategory||"").toLowerCase()))
-        );
-      }
-
-      // If filters narrowed to 0, use unfiltered
-      if (!results.length) results = details.filter(Boolean);
-
-      setRecipes(results.slice(0, 8));
-    } catch (e) {
-      setErr("The chuck wagon broke down. Check your connection and try again.");
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 4000,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      const data = await resp.json();
+      const raw = (data.content || []).map(c => c.text || "").join("");
+      const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+      setRecipes(parsed.recipes || []);
+    } catch {
+      setErr("The chuck wagon broke down. Try again, partner.");
     }
     setLoading(false);
   };
 
   const togList = (item, setList) =>
-    setList(p => p.includes(item) ? p.filter(x=>x!==item) : [...p, item]);
+    setList(p => p.includes(item) ? p.filter(x => x !== item) : [...p, item]);
 
   return (
     <div className="root-wrap">
@@ -463,7 +437,7 @@ export default function Oasis() {
 
         <div style={{maxWidth:960,margin:"0 auto",padding:"28px 16px",display:"flex",flexDirection:"column",gap:24}}>
 
-          {/* Step 1 */}
+          {/* ── Step 1: Ingredients ── */}
           <div className="parchment" style={{borderRadius:4,overflow:"hidden"}}>
             <div style={{background:"#3d2008",padding:"14px 24px",borderBottom:"2px solid #8b5a1a",display:"flex",alignItems:"center",gap:12}}>
               <Star s={18}/>
@@ -536,12 +510,14 @@ export default function Oasis() {
             {ingredients.length>0 && (
               <div style={{borderTop:"1px solid #c9922a",background:"rgba(139,90,26,0.08)",padding:"10px 24px",display:"flex",alignItems:"center",gap:8}}>
                 <Star s={14}/>
-                <span className="cp" style={{fontSize:12,color:"#8b5a1a",fontWeight:700}}>{ingredients.length} ingredient{ingredients.length!==1?"s":""} rounded up</span>
+                <span className="cp" style={{fontSize:12,color:"#8b5a1a",fontWeight:700}}>
+                  {ingredients.length} ingredient{ingredients.length!==1?"s":""} rounded up: {ingredients.join(", ")}
+                </span>
               </div>
             )}
           </div>
 
-          {/* Step 2 */}
+          {/* ── Step 2: Preferences ── */}
           <div className="parchment" style={{borderRadius:4,overflow:"hidden"}}>
             <div style={{background:"#3d2008",padding:"14px 24px",borderBottom:"2px solid #8b5a1a",display:"flex",alignItems:"center",gap:12}}>
               <Star s={18}/>
@@ -551,21 +527,15 @@ export default function Oasis() {
             <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:20}}>
               <div>
                 <p className="sl">Cuisine Type</p>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {CUISINE_TYPES.map(c=><Pill key={c} label={c} active={cuisineType.includes(c)} onClick={()=>togList(c,setCuisineType)}/>)}
-                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{CUISINE_TYPES.map(c=><Pill key={c} label={c} active={cuisineType.includes(c)} onClick={()=>togList(c,setCuisineType)}/>)}</div>
               </div>
               <div>
                 <p className="sl">Meal Type</p>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {MEAL_TYPES.map(m=><Pill key={m} label={m} active={mealType.includes(m)} onClick={()=>togList(m,setMealType)}/>)}
-                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{MEAL_TYPES.map(m=><Pill key={m} label={m} active={mealType.includes(m)} onClick={()=>togList(m,setMealType)}/>)}</div>
               </div>
               <div>
                 <p className="sl">Dish Type</p>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {DISH_TYPES.map(d=><Pill key={d} label={d} active={dishType.includes(d)} onClick={()=>togList(d,setDishType)}/>)}
-                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{DISH_TYPES.map(d=><Pill key={d} label={d} active={dishType.includes(d)} onClick={()=>togList(d,setDishType)}/>)}</div>
               </div>
               <div>
                 <p className="sl">Anything Else, Cowpoke?</p>
@@ -594,10 +564,10 @@ export default function Oasis() {
               <div style={{textAlign:"center",marginBottom:20}}>
                 <div className="rope" style={{margin:"0 auto 16px",maxWidth:320}}/>
                 <h2 className="rye" style={{color:"#f0c060",fontSize:24,letterSpacing:"0.08em",textShadow:"2px 2px 0 rgba(0,0,0,0.6)"}}>✦ Tonight's Grub ✦</h2>
-                <p style={{fontSize:13,color:"#c9922a",fontStyle:"italic",marginTop:4}}>{recipes.length} recipes wrangled from the frontier</p>
+                <p style={{fontSize:13,color:"#c9922a",fontStyle:"italic",marginTop:4}}>{recipes.length} recipes wrangled from your ingredients</p>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:20}}>
-                {recipes.map((r,i)=><RecipeCard key={r.idMeal} meal={r} idx={i}/>)}
+                {recipes.map((r,i)=><RecipeCard key={i} r={r} idx={i}/>)}
               </div>
               <div style={{marginTop:24,textAlign:"center"}}>
                 <button className="draw-btn" onClick={fetchRecipes} style={{fontSize:15,padding:"12px 30px"}}>🔄 Ride Again — New Recipes</button>
