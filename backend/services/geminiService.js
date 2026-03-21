@@ -41,16 +41,5 @@ export async function getIngredientsFromGemini({ imageFile, manualIngredients })
 
     const imageIngredients = parsed.ingredients || [];
 
-    const manualList = manualIngredients
-    .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-    const combined = [...imageIngredients, ...manualList];
-
-    const uniqueIngredients = Array.from(
-    new Map(combined.map((item) => [item.toLowerCase(), item])).values()
-    );
-
-    return { ingredients: uniqueIngredients };
+    return { ingredients: imageIngredients };
 }

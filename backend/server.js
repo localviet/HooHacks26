@@ -15,7 +15,7 @@ app.use(express.json());
 //routing
 app.use("/api/ingredients", ingredientRoutes)
 
-
+//app.use("/api/recipes", recipeRoutes)
 
 
 //run
